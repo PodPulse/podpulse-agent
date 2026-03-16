@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package podpulse.v1;
+
+option go_package = "github.com/podpulse/podpulse-agent/proto/podpulse/v1;v1";
+
+service IncidentService {
+  rpc ReportIncident (IncidentReport) returns (ReportAck);
+}
+
+message IncidentReport {
+  string incident_id    = 1;
+  string incident_type  = 2; // e.g. OOMKilled, CrashLoopBackOff
+  string namespace      = 3;
+  string pod_name       = 4;
+  string node_name      = 5;
+  int32  restart_count  = 6;
+  string raw_context    = 7; // JSON-serialized, size-bounded
+  int64  detected_at    = 8; // Unix timestamp (UTC)
+}
+
+message ReportAck {
+  string incident_id = 1;
+  bool   accepted    = 2;
+}

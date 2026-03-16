@@ -209,6 +209,11 @@ The goal is precision over recall: handle a small number of incident types well.
 **Decision:** W1–W4 covers OOMKilled only. Additional incident types are added iteratively.
 **Rationale:** A small number of well-handled incident types produces better diagnostics and higher SRE trust than broad but shallow coverage.
 
+### ADR-006 — Dual-path OOMKilled detection
+**Decision:** OOMKilled is detected via two complementary paths: event stream (`OOMKilling` reason) and pod status (`containerStatus.lastTerminationState.reason = OOMKilled`).
+**Rationale:** Observed empirically on k3s — the `OOMKilling` event is not emitted by all runtimes. Relying on events alone produces false negatives. The pod status path is always populated regardless of runtime. Both paths are active simultaneously; the event path is kept for runtimes that do emit it. Re-triggering is prevented by comparing `restartCount` between old and new pod state.
+**Known limitation:** Tested on k3s (containerd) only. Compatibility with CRI-O to be validated before first design partner onboarding.
+
 ---
 
 ## 8. Out of Scope — W1–W4
