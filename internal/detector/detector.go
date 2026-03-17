@@ -7,17 +7,20 @@ import (
     v1lister "k8s.io/client-go/listers/core/v1"
 
     contextbuilder "github.com/PodPulse/podpulse-agent/internal/context"
+    "github.com/PodPulse/podpulse-agent/internal/emitter"
 )
 
 type IncidentDetector struct {
     podLister      v1lister.PodLister
     contextBuilder contextbuilder.ContextBuilder
+    emitter        *emitter.ReportEmitter
 }
 
-func New(podLister v1lister.PodLister, cb contextbuilder.ContextBuilder) *IncidentDetector {
+func New(podLister v1lister.PodLister, cb contextbuilder.ContextBuilder, e *emitter.ReportEmitter) *IncidentDetector {
     return &IncidentDetector{
         podLister:      podLister,
         contextBuilder: cb,
+        emitter:        e,
     }
 }
 
@@ -35,7 +38,7 @@ func (d *IncidentDetector) OnEvent(event *corev1.Event) {
         return
     }
 
-    d.buildAndPrint(pod, event)
+    d.buildAndEmit(pod, event)
 }
 
 func (d *IncidentDetector) OnPodUpdate(old, new *corev1.Pod) {
@@ -51,16 +54,18 @@ func (d *IncidentDetector) OnPodUpdate(old, new *corev1.Pod) {
             }
         }
 
-        d.buildAndPrint(new, nil)
+        d.buildAndEmit(new, nil)
         return
     }
 }
 
-func (d *IncidentDetector) buildAndPrint(pod *corev1.Pod, event *corev1.Event) {
+func (d *IncidentDetector) buildAndEmit(pod *corev1.Pod, event *corev1.Event) {
     ctx, err := d.contextBuilder.Build(pod, event)
     if err != nil {
         fmt.Printf("[ERROR] failed to build context: %v\n", err)
         return
     }
+    // W2 console output kept for local dev visibility
     fmt.Printf("[INCIDENT] %+v\n", ctx)
+    d.emitter.Emit(ctx)
 }
