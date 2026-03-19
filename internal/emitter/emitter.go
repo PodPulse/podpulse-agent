@@ -76,10 +76,12 @@ func generateID(ctx *incidentcontext.IncidentContext) string {
 // buildRawContext serializes the relevant fields as a JSON string
 func buildRawContext(ctx *incidentcontext.IncidentContext) string {
     return fmt.Sprintf(
-        `{"container":"%s","restart_count":%d,"memory_limit":"%s","memory_used_at_kill":"%s"}`,
+        `{"container":"%s","restart_count":%d,"memory_limit":"%s","memory_used_at_kill":"%s","owner_kind":"%s","owner_name":"%s"}`,
         ctx.ContainerName,
         ctx.RestartCount,
         ctx.MemoryLimit,
         ctx.MemoryUsedAtKill,
+        ctx.OwnerKind,
+        ctx.OwnerName,
     )
 }

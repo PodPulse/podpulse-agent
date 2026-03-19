@@ -51,9 +51,11 @@ func main() {
     podInformer   := factory.Core().V1().Pods().Informer()
     podLister     := factory.Core().V1().Pods().Lister()
     eventInformer := factory.Core().V1().Events().Informer()
+    rsInformer    := factory.Apps().V1().ReplicaSets().Informer()
+    rsLister      := factory.Apps().V1().ReplicaSets().Lister()
 
     cb := incidentcontext.NewOOMContextBuilder()
-    d  := detector.New(podLister, cb, e)
+    d  := detector.New(podLister, rsLister, cb, e)
 
     eventInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
         AddFunc: func(obj interface{}) {
@@ -78,7 +80,7 @@ func main() {
 
     stopCh := make(chan struct{})
     factory.Start(stopCh)
-    cache.WaitForCacheSync(stopCh, podInformer.HasSynced, eventInformer.HasSynced)
+    cache.WaitForCacheSync(stopCh, podInformer.HasSynced, eventInformer.HasSynced, rsInformer.HasSynced)
 
     fmt.Printf("[INFO] PodPulse agent started — backend: %s\n", appConfig.BackendAddr)
 
