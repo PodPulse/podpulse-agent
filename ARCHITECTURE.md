@@ -87,14 +87,14 @@ It never calls any external AI API directly — all analysis happens in the back
 
 ### Component responsibilities
 
-| Component | Responsibility |
-|---|---|
-| `EventWatcher` | Watch Kubernetes events via `client-go` informers |
-| `PodWatcher` | Watch pod lifecycle and container status changes |
-| `LogCollector` | Fetch container logs on incident trigger (bounded tail) |
-| `IncidentDetector` | Pattern matching against known incident types |
-| `ContextBuilder` | Assemble structured incident context, enforce payload size cap, strip secrets |
-| `ReportEmitter` | Send `IncidentReport` to the PodPulse backend via gRPC |
+| Component | Responsibility | Status |
+|---|---|---|
+| `EventWatcher` | Watch Kubernetes events via `client-go` informers | ✅ W1–W2 |
+| `PodWatcher` | Watch pod lifecycle and container status changes | ✅ W1–W2 |
+| `LogCollector` | Fetch container logs on incident trigger (bounded tail) | 🔜 W3 |
+| `IncidentDetector` | OOMKilled detection — dual-path (event stream + pod status) | ✅ W2 |
+| `ContextBuilder` | Assemble structured incident context, enforce payload size cap, strip secrets | ✅ W2 |
+| `ReportEmitter` | Send `IncidentReport` to the PodPulse backend via gRPC, retry with exponential backoff | ✅ W3 |
 
 ---
 
@@ -213,6 +213,10 @@ The goal is precision over recall: handle a small number of incident types well.
 **Decision:** OOMKilled is detected via two complementary paths: event stream (`OOMKilling` reason) and pod status (`containerStatus.lastTerminationState.reason = OOMKilled`).
 **Rationale:** Observed empirically on k3s — the `OOMKilling` event is not emitted by all runtimes. Relying on events alone produces false negatives. The pod status path is always populated regardless of runtime. Both paths are active simultaneously; the event path is kept for runtimes that do emit it. Re-triggering is prevented by comparing `restartCount` between old and new pod state.
 **Known limitation:** Tested on k3s (containerd) only. Compatibility with CRI-O to be validated before first design partner onboarding.
+
+### ADR-007 — ReportEmitter retry with exponential backoff
+**Decision:** `ReportEmitter` retries failed gRPC calls up to 3 times with exponential backoff (500ms base delay). After all retries are exhausted, the error is logged and the agent continues — it never crashes.
+**Rationale:** The backend may be temporarily unavailable (restart, deploy, network blip). The agent must remain operational regardless. Incidents are best-effort at this stage — deduplication and guaranteed delivery come with Redis in W5+.
 
 ---
 

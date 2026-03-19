@@ -2,6 +2,7 @@ package emitter
 
 import (
     "context"
+    "encoding/json"
     "fmt"
     "math"
     "time"
@@ -9,8 +10,8 @@ import (
     "google.golang.org/grpc"
     "google.golang.org/grpc/credentials/insecure"
 
-    pb "github.com/PodPulse/podpulse-agent/proto/podpulse/v1"
     incidentcontext "github.com/PodPulse/podpulse-agent/internal/context"
+    pb "github.com/PodPulse/podpulse-agent/proto/podpulse/v1"
 )
 
 const (
@@ -73,15 +74,18 @@ func generateID(ctx *incidentcontext.IncidentContext) string {
     return fmt.Sprintf("%s-%s-%d", ctx.Namespace, ctx.PodName, time.Now().UnixNano())
 }
 
-// buildRawContext serializes the relevant fields as a JSON string
+// buildRawContext serializes the relevant fields as a JSON string.
+// LogTail is marshaled via encoding/json to safely handle arbitrary log content.
 func buildRawContext(ctx *incidentcontext.IncidentContext) string {
+    logTailJSON, _ := json.Marshal(ctx.LogTail)
     return fmt.Sprintf(
-        `{"container":"%s","restart_count":%d,"memory_limit":"%s","memory_used_at_kill":"%s","owner_kind":"%s","owner_name":"%s"}`,
+        `{"container":"%s","restart_count":%d,"memory_limit":"%s","memory_used_at_kill":"%s","owner_kind":"%s","owner_name":"%s","log_tail":%s}`,
         ctx.ContainerName,
         ctx.RestartCount,
         ctx.MemoryLimit,
         ctx.MemoryUsedAtKill,
         ctx.OwnerKind,
         ctx.OwnerName,
+        string(logTailJSON),
     )
 }

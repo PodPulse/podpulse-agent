@@ -1,10 +1,14 @@
 package context
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
+
+	"github.com/PodPulse/podpulse-agent/internal/collector"
 )
 
 type IncidentContext struct {
@@ -19,16 +23,19 @@ type IncidentContext struct {
 	RawEvents        []string
 	OwnerKind        string // e.g. "Deployment", "StatefulSet", "DaemonSet", "Job", "" (standalone pod)
 	OwnerName        string // name of the final owner (not the intermediate ReplicaSet)
+	LogTail          string // last N lines from the previous (crashed) container instance
 }
 
 type ContextBuilder interface {
 	Build(pod *corev1.Pod, event *corev1.Event, rsLister appsv1lister.ReplicaSetLister) (*IncidentContext, error)
 }
 
-type OOMContextBuilder struct{}
+type OOMContextBuilder struct {
+	logCollector *collector.LogCollector
+}
 
-func NewOOMContextBuilder() *OOMContextBuilder {
-	return &OOMContextBuilder{}
+func NewOOMContextBuilder(lc *collector.LogCollector) *OOMContextBuilder {
+	return &OOMContextBuilder{logCollector: lc}
 }
 
 func (b *OOMContextBuilder) Build(pod *corev1.Pod, event *corev1.Event, rsLister appsv1lister.ReplicaSetLister) (*IncidentContext, error) {
@@ -67,6 +74,13 @@ func (b *OOMContextBuilder) Build(pod *corev1.Pod, event *corev1.Event, rsLister
 	}
 
 	resolveOwner(ctx, pod, rsLister)
+
+	// Fetch crash logs only when we know which container OOM-killed.
+	if ctx.ContainerName != "" && b.logCollector != nil {
+		logCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		ctx.LogTail = b.logCollector.Collect(logCtx, ctx.Namespace, ctx.PodName, ctx.ContainerName)
+	}
 
 	return ctx, nil
 }

@@ -12,8 +12,9 @@ import (
     "k8s.io/client-go/tools/clientcmd"
     "k8s.io/client-go/util/homedir"
 
-    incidentcontext "github.com/PodPulse/podpulse-agent/internal/context"
+    "github.com/PodPulse/podpulse-agent/internal/collector"
     "github.com/PodPulse/podpulse-agent/internal/config"
+    incidentcontext "github.com/PodPulse/podpulse-agent/internal/context"
     "github.com/PodPulse/podpulse-agent/internal/detector"
     "github.com/PodPulse/podpulse-agent/internal/emitter"
 )
@@ -54,7 +55,8 @@ func main() {
     rsInformer    := factory.Apps().V1().ReplicaSets().Informer()
     rsLister      := factory.Apps().V1().ReplicaSets().Lister()
 
-    cb := incidentcontext.NewOOMContextBuilder()
+    logCollector := collector.New(clientset, 50)
+    cb := incidentcontext.NewOOMContextBuilder(logCollector)
     d  := detector.New(podLister, rsLister, cb, e)
 
     eventInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
