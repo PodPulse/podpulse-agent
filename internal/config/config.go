@@ -1,28 +1,35 @@
 package config
 
 import (
-    "flag"
-    "os"
+	"flag"
+	"os"
 )
 
 type Config struct {
-    BackendAddr string
+	BackendAddr string
+	ApiKey      string
 }
 
 func Load() *Config {
-    backendFlag := flag.String("backend-addr", "", "gRPC backend address (e.g. localhost:50051)")
-    flag.Parse()
+	backendFlag := flag.String("backend-addr", "", "gRPC backend address")
+	apiKeyFlag := flag.String("api-key", "", "PodPulse API key")
+	flag.Parse()
 
-    // Environment variable takes priority over flag
-    addr := os.Getenv("PODPULSE_BACKEND_ADDR")
-    if addr == "" {
-        addr = *backendFlag
-    }
-    if addr == "" {
-        addr = "localhost:50051" // default for local dev
-    }
+	addr := os.Getenv("PODPULSE_BACKEND_ADDR")
+	if addr == "" {
+		addr = *backendFlag
+	}
+	if addr == "" {
+		addr = "localhost:5050"
+	}
 
-    return &Config{
-        BackendAddr: addr,
-    }
+	apiKey := os.Getenv("PODPULSE_API_KEY")
+	if apiKey == "" {
+		apiKey = *apiKeyFlag
+	}
+
+	return &Config{
+		BackendAddr: addr,
+		ApiKey:      apiKey,
+	}
 }
