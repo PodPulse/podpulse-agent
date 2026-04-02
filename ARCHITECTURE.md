@@ -1,6 +1,6 @@
 # PodPulse Agent — Architecture
 
-> **Scope:** W1–W5
+> **Scope:** W1–W6
 > This document covers the in-cluster agent component hosted in this repository.
 > The PodPulse backend is a separate, private service.
 
@@ -101,7 +101,41 @@ It never calls any external AI API directly — all analysis happens in the back
 
 ---
 
-## 3. gRPC Contract (Agent → Backend)
+## 3. Deployment (W6)
+
+The agent is distributed as a Docker image and deployed via Helm.
+
+**Docker image:** `ghcr.io/podpulse/podpulse-agent`
+**Helm chart:** `https://github.com/PodPulse/podpulse-helm`
+
+**Image build:**
+- Base: `golang:1.25-alpine` (build) → `gcr.io/distroless/static-debian12` (runtime)
+- Final image: ~5MB, no shell, no package manager
+- Runs as `nonroot` (UID 65532)
+- Build flags: `CGO_ENABLED=0 -trimpath -ldflags="-w -s"`
+
+**Helm install:**
+```bash
+helm repo add podpulse https://podpulse.github.io/podpulse-helm
+helm install podpulse-agent podpulse/podpulse-agent \
+  --namespace podpulse \
+  --create-namespace \
+  --set agent.backend.address=api.podpulse.io:443 \
+  --set agent.backend.apiKey=pk_live_...
+```
+
+**What the chart deploys:**
+- `Deployment` — the agent pod (1 replica)
+- `ServiceAccount` — K8s identity
+- `ClusterRole` — read-only permissions
+- `ClusterRoleBinding` — binds ServiceAccount to ClusterRole
+- `Secret` — holds `PODPULSE_API_KEY` and `PODPULSE_BACKEND_ADDR`
+
+**Automatic pod restart on secret change** via `checksum/secret` annotation on `spec.template`.
+
+---
+
+## 4. gRPC Contract (Agent → Backend)
 
 The agent communicates with the backend through a single gRPC service.
 
@@ -143,7 +177,7 @@ x-api-key: pk_live_Abc123...  // per-cluster API key — set via PODPULSE_API_KE
 
 ---
 
-## 4. RBAC — Required Permissions
+## 5. RBAC — Required Permissions
 
 The agent requires **read-only** access to the following resources:
 
@@ -172,7 +206,7 @@ rules:
 
 ---
 
-## 5. Incident Detection — Scope
+## 6. Incident Detection — Scope
 
 Detection is intentionally narrow for the MVP.
 The goal is precision over recall: handle a small number of incident types well.
@@ -187,18 +221,19 @@ The goal is precision over recall: handle a small number of incident types well.
 
 ---
 
-## 6. Security Principles
+## 7. Security Principles
 
 - **Read-only** — the agent holds no write permissions, ever
 - **No secrets** — Kubernetes secrets and environment variable values are never collected or transmitted
 - **Bounded payload** — incident context is size-capped before transmission; the backend enforces the corresponding AI inference budget
 - **No direct AI calls** — the agent never calls Claude or any external AI API
 - **API key auth** — every gRPC call carries a per-cluster API key in metadata (`x-api-key`); key stored in a Kubernetes Secret
+- **Minimal image** — distroless runtime, no shell, runs as nonroot
 - **Optional anonymization** — pod names and namespaces can be anonymized before transmission (future)
 
 ---
 
-## 7. Architectural Decision Records
+## 8. Architectural Decision Records
 
 ### ADR-001 — Go for the in-cluster agent
 **Decision:** The agent is written in Go.
@@ -233,12 +268,21 @@ The goal is precision over recall: handle a small number of incident types well.
 **Decision:** The agent sends a per-cluster API key in gRPC metadata (`x-api-key`) on every call. The key is stored in a Kubernetes Secret and injected via Helm values.
 **Rationale:** The backend is multi-tenant — it must identify which cluster is sending each incident report. API key per cluster gives fine-grained revocation (one compromised cluster does not affect others) and maps cleanly to Kubernetes Secrets for secure storage in-cluster.
 
+### ADR-009 — Distroless runtime image (W6)
+**Decision:** The agent runs on `gcr.io/distroless/static-debian12` with no shell and no package manager.
+**Rationale:** Minimal attack surface for an in-cluster component with broad read permissions. No shell means no command injection even if the container is compromised. Consistent with enterprise security requirements (Elia).
+
+### ADR-010 — Helm for deployment (W6)
+**Decision:** The agent is distributed and deployed via Helm chart from a dedicated `podpulse-helm` repository.
+**Rationale:** Helm is the de facto standard for Kubernetes application packaging. A dedicated chart repo allows independent versioning of the chart and the agent binary, and enables `helm repo add` for easy installation by design partners.
+
 ---
 
-## 8. Out of Scope — current
+## 9. Out of Scope — current
 
 - UI / dashboard
-- Multi-cluster support
+- Multi-cluster support per tenant
 - Prometheus metrics / Grafana integration
 - Incident types beyond OOMKilled (W8+)
 - Payload anonymization
+- CI/CD for image build (W8+)
