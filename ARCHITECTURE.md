@@ -1,6 +1,6 @@
 # PodPulse Agent — Architecture
 
-> **Scope:** W1–W4 (MVP — OOMKilled end-to-end + GitHub PR generation)
+> **Scope:** W1–W5
 > This document covers the in-cluster agent component hosted in this repository.
 > The PodPulse backend is a separate, private service.
 
@@ -18,11 +18,11 @@
 │   │  - Watch pods, events, logs (read-only)      │   │
 │   │  - Detect incident patterns                  │   │
 │   │  - Build structured incident context         │   │
-│   │  - Emit IncidentReport via gRPC              │   │
+│   │  - Emit IncidentReport via gRPC + x-api-key  │   │
 │   └──────────────────────┬───────────────────────┘   │
 └──────────────────────────────────────────────────────┘
                            │
-                           │  gRPC (IncidentReport)
+                           │  gRPC (IncidentReport + x-api-key metadata)
                            ▼
             ┌──────────────────────────┐
             │   PodPulse Backend       │
@@ -63,7 +63,7 @@ It never calls any external AI API directly — all analysis happens in the back
 │            │IncidentDetector │◄──────────────┘         │
 │            │                 │                         │
 │            │ Pattern match   │                         │
-│            │ W1-W4: OOMKilled│                         │
+│            │ OOMKilled       │                         │
 │            └────────┬────────┘                         │
 │                     │                                  │
 │                     ▼                                  │
@@ -71,6 +71,8 @@ It never calls any external AI API directly — all analysis happens in the back
 │            │ ContextBuilder  │                         │
 │            │                 │                         │
 │            │ Assemble context│                         │
+│            │ Owner chain     │                         │
+│            │ Log tail        │                         │
 │            │ Bounded payload │                         │
 │            │ No secrets      │                         │
 │            └────────┬────────┘                         │
@@ -81,6 +83,7 @@ It never calls any external AI API directly — all analysis happens in the back
 │            │                 │                         │
 │            │ Send Incident   │                         │
 │            │ Report via gRPC │                         │
+│            │ + x-api-key     │                         │
 │            └─────────────────┘                         │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -91,10 +94,10 @@ It never calls any external AI API directly — all analysis happens in the back
 |---|---|---|
 | `EventWatcher` | Watch Kubernetes events via `client-go` informers | ✅ W1–W2 |
 | `PodWatcher` | Watch pod lifecycle and container status changes | ✅ W1–W2 |
-| `LogCollector` | Fetch container logs on incident trigger (bounded tail) | 🔜 W3 |
+| `LogCollector` | Fetch container logs on incident trigger (bounded tail, previous container) | ✅ W4 |
 | `IncidentDetector` | OOMKilled detection — dual-path (event stream + pod status) | ✅ W2 |
-| `ContextBuilder` | Assemble structured incident context, enforce payload size cap, strip secrets | ✅ W2 |
-| `ReportEmitter` | Send `IncidentReport` to the PodPulse backend via gRPC, retry with exponential backoff | ✅ W3 |
+| `ContextBuilder` | Assemble incident context, owner chain, log tail, enforce payload size cap, strip secrets | ✅ W4 |
+| `ReportEmitter` | Send `IncidentReport` + `x-api-key` metadata via gRPC, retry with exponential backoff | ✅ W5 |
 
 ---
 
@@ -128,7 +131,14 @@ message ReportAck {
 }
 ```
 
+**gRPC metadata (W5):**
+```
+x-api-key: pk_live_Abc123...  // per-cluster API key — set via PODPULSE_API_KEY env var
+```
+
 > The `raw_context` field contains a structured JSON payload built by `ContextBuilder`.
+> Fields: `container`, `restart_count`, `memory_limit`, `memory_used_at_kill`,
+> `owner_kind`, `owner_name`, `log_tail`.
 > It never includes Kubernetes secrets or environment variable values.
 
 ---
@@ -162,7 +172,7 @@ rules:
 
 ---
 
-## 5. Incident Detection — W1–W4 Scope
+## 5. Incident Detection — Scope
 
 Detection is intentionally narrow for the MVP.
 The goal is precision over recall: handle a small number of incident types well.
@@ -170,8 +180,8 @@ The goal is precision over recall: handle a small number of incident types well.
 | Incident Type | Status |
 |---|---|
 | `OOMKilled` | ✅ W1–W4 |
-| `CrashLoopBackOff` | 🔜 W5–W6 |
-| `ImagePullBackOff` | 🔜 W7–W8 |
+| `CrashLoopBackOff` | 🔜 W8+ |
+| `ImagePullBackOff` | 🔜 W8+ |
 | `FailedScheduling` | 🔜 Post-MVP |
 | `Pending (resource pressure)` | 🔜 Post-MVP |
 
@@ -183,6 +193,7 @@ The goal is precision over recall: handle a small number of incident types well.
 - **No secrets** — Kubernetes secrets and environment variable values are never collected or transmitted
 - **Bounded payload** — incident context is size-capped before transmission; the backend enforces the corresponding AI inference budget
 - **No direct AI calls** — the agent never calls Claude or any external AI API
+- **API key auth** — every gRPC call carries a per-cluster API key in metadata (`x-api-key`); key stored in a Kubernetes Secret
 - **Optional anonymization** — pod names and namespaces can be anonymized before transmission (future)
 
 ---
@@ -206,7 +217,7 @@ The goal is precision over recall: handle a small number of incident types well.
 **Rationale:** Separation of concerns. The agent observes and assembles context — it does not analyze. This also keeps the agent's network policy simple: egress to the backend endpoint only.
 
 ### ADR-005 — Precision over recall for incident detection
-**Decision:** W1–W4 covers OOMKilled only. Additional incident types are added iteratively.
+**Decision:** OOMKilled is the first incident type. Additional types are added iteratively based on design partner feedback.
 **Rationale:** A small number of well-handled incident types produces better diagnostics and higher SRE trust than broad but shallow coverage.
 
 ### ADR-006 — Dual-path OOMKilled detection
@@ -218,16 +229,16 @@ The goal is precision over recall: handle a small number of incident types well.
 **Decision:** `ReportEmitter` retries failed gRPC calls up to 3 times with exponential backoff (500ms base delay). After all retries are exhausted, the error is logged and the agent continues — it never crashes.
 **Rationale:** The backend may be temporarily unavailable (restart, deploy, network blip). The agent must remain operational regardless. Incidents are best-effort at this stage — deduplication and guaranteed delivery come with Redis in W5+.
 
+### ADR-008 — Per-cluster API key authentication (W5)
+**Decision:** The agent sends a per-cluster API key in gRPC metadata (`x-api-key`) on every call. The key is stored in a Kubernetes Secret and injected via Helm values.
+**Rationale:** The backend is multi-tenant — it must identify which cluster is sending each incident report. API key per cluster gives fine-grained revocation (one compromised cluster does not affect others) and maps cleanly to Kubernetes Secrets for secure storage in-cluster.
+
 ---
 
-## 8. Out of Scope — W1–W4
+## 8. Out of Scope — current
 
-The following are intentionally excluded from the current phase:
-
-- Redis (deduplication, pattern caching) — introduced post W4
 - UI / dashboard
 - Multi-cluster support
 - Prometheus metrics / Grafana integration
-- Auth and API key management
-- Incident history and persistence
-- Incident types beyond OOMKilled
+- Incident types beyond OOMKilled (W8+)
+- Payload anonymization
