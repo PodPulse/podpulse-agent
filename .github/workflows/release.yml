@@ -39,13 +39,3 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.version }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-
-      - name: Set image visibility to private
-        run: |
-          gh api \
-            --method PATCH \
-            -H "Accept: application/vnd.github+json" \
-            /user/packages/container/podpulse-agent/visibility \
-            -f visibility='private'
-        env:
-          GH_TOKEN: ${{ secrets.GHCR_PAT }}
