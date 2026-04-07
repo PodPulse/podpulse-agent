@@ -20,15 +20,19 @@ type IncidentContext struct {
 	RestartCount     int32
 	MemoryLimit      string
 	MemoryUsedAtKill string
+	LastExitCode     int32
+	LastExitReason   string
 	RawEvents        []string
-	OwnerKind        string // e.g. "Deployment", "StatefulSet", "DaemonSet", "Job", "" (standalone pod)
-	OwnerName        string // name of the final owner (not the intermediate ReplicaSet)
-	LogTail          string // last N lines from the previous (crashed) container instance
+	OwnerKind        string
+	OwnerName        string
+	LogTail          string
 }
 
 type ContextBuilder interface {
 	Build(pod *corev1.Pod, event *corev1.Event, rsLister appsv1lister.ReplicaSetLister) (*IncidentContext, error)
 }
+
+// --- OOMKilled ---
 
 type OOMContextBuilder struct {
 	logCollector *collector.LogCollector
@@ -66,8 +70,8 @@ func (b *OOMContextBuilder) Build(pod *corev1.Pod, event *corev1.Event, rsLister
 			}
 		}
 
-		if pod.Status.ContainerStatuses[i].LastTerminationState.Terminated.Message != "" {
-			ctx.MemoryUsedAtKill = pod.Status.ContainerStatuses[i].LastTerminationState.Terminated.Message
+		if cs.LastTerminationState.Terminated.Message != "" {
+			ctx.MemoryUsedAtKill = cs.LastTerminationState.Terminated.Message
 		}
 
 		break
@@ -75,7 +79,6 @@ func (b *OOMContextBuilder) Build(pod *corev1.Pod, event *corev1.Event, rsLister
 
 	resolveOwner(ctx, pod, rsLister)
 
-	// Fetch crash logs only when we know which container OOM-killed.
 	if ctx.ContainerName != "" && b.logCollector != nil {
 		logCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -85,12 +88,63 @@ func (b *OOMContextBuilder) Build(pod *corev1.Pod, event *corev1.Event, rsLister
 	return ctx, nil
 }
 
-// resolveOwner walks pod.OwnerReferences to determine the final controlling workload.
-// If the direct owner is a ReplicaSet, it looks up the ReplicaSet in the cache to find
-// the owning Deployment. All resolution is cache-only — no API calls are made.
+// --- CrashLoopBackOff ---
+
+type CrashLoopContextBuilder struct {
+	logCollector *collector.LogCollector
+}
+
+func NewCrashLoopContextBuilder(lc *collector.LogCollector) *CrashLoopContextBuilder {
+	return &CrashLoopContextBuilder{logCollector: lc}
+}
+
+func (b *CrashLoopContextBuilder) Build(pod *corev1.Pod, event *corev1.Event, rsLister appsv1lister.ReplicaSetLister) (*IncidentContext, error) {
+	ctx := &IncidentContext{
+		IncidentType: "CrashLoopBackOff",
+		Namespace:    pod.Namespace,
+		PodName:      pod.Name,
+		NodeName:     pod.Spec.NodeName,
+		RawEvents:    []string{},
+	}
+
+	if event != nil {
+		ctx.RawEvents = append(ctx.RawEvents, event.Message)
+	}
+
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.RestartCount < 3 {
+			continue
+		}
+		if cs.LastTerminationState.Terminated == nil {
+			continue
+		}
+		if cs.LastTerminationState.Terminated.Reason == "OOMKilled" {
+			continue
+		}
+
+		ctx.ContainerName = cs.Name
+		ctx.RestartCount = cs.RestartCount
+		ctx.LastExitCode = cs.LastTerminationState.Terminated.ExitCode
+		ctx.LastExitReason = cs.LastTerminationState.Terminated.Reason
+
+		break
+	}
+
+	resolveOwner(ctx, pod, rsLister)
+
+	if ctx.ContainerName != "" && b.logCollector != nil {
+		logCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		ctx.LogTail = b.logCollector.Collect(logCtx, ctx.Namespace, ctx.PodName, ctx.ContainerName)
+	}
+
+	return ctx, nil
+}
+
+// --- Owner resolution ---
+
 func resolveOwner(ctx *IncidentContext, pod *corev1.Pod, rsLister appsv1lister.ReplicaSetLister) {
 	if len(pod.OwnerReferences) == 0 {
-		// Standalone pod — leave OwnerKind/OwnerName empty
 		return
 	}
 

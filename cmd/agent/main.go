@@ -56,8 +56,9 @@ func main() {
 	rsLister := factory.Apps().V1().ReplicaSets().Lister()
 
 	logCollector := collector.New(clientset, 50)
-	cb := incidentcontext.NewOOMContextBuilder(logCollector)
-	d := detector.New(podLister, rsLister, cb, e)
+	oomBuilder := incidentcontext.NewOOMContextBuilder(logCollector)
+	crashLoopBuilder := incidentcontext.NewCrashLoopContextBuilder(logCollector)
+	d := detector.New(podLister, rsLister, oomBuilder, crashLoopBuilder, e)
 
 	eventInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {

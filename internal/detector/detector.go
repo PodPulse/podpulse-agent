@@ -2,6 +2,7 @@ package detector
 
 import (
 	"fmt"
+	"log"
 
 	corev1 "k8s.io/api/core/v1"
 	appsv1lister "k8s.io/client-go/listers/apps/v1"
@@ -12,18 +13,26 @@ import (
 )
 
 type IncidentDetector struct {
-	podLister      v1lister.PodLister
-	rsLister       appsv1lister.ReplicaSetLister
-	contextBuilder contextbuilder.ContextBuilder
-	emitter        *emitter.ReportEmitter
+	podLister        v1lister.PodLister
+	rsLister         appsv1lister.ReplicaSetLister
+	oomBuilder       contextbuilder.ContextBuilder
+	crashLoopBuilder contextbuilder.ContextBuilder
+	emitter          *emitter.ReportEmitter
 }
 
-func New(podLister v1lister.PodLister, rsLister appsv1lister.ReplicaSetLister, cb contextbuilder.ContextBuilder, e *emitter.ReportEmitter) *IncidentDetector {
+func New(
+	podLister v1lister.PodLister,
+	rsLister appsv1lister.ReplicaSetLister,
+	oomBuilder contextbuilder.ContextBuilder,
+	crashLoopBuilder contextbuilder.ContextBuilder,
+	e *emitter.ReportEmitter,
+) *IncidentDetector {
 	return &IncidentDetector{
-		podLister:      podLister,
-		rsLister:       rsLister,
-		contextBuilder: cb,
-		emitter:        e,
+		podLister:        podLister,
+		rsLister:         rsLister,
+		oomBuilder:       oomBuilder,
+		crashLoopBuilder: crashLoopBuilder,
+		emitter:          e,
 	}
 }
 
@@ -41,11 +50,25 @@ func (d *IncidentDetector) OnEvent(event *corev1.Event) {
 		return
 	}
 
-	d.buildAndEmit(pod, event)
+	d.buildAndEmit(pod, event, d.oomBuilder)
 }
 
 func (d *IncidentDetector) OnPodUpdate(old, new *corev1.Pod) {
 	for _, newCs := range new.Status.ContainerStatuses {
+		log.Printf("[DEBUG] pod=%s container=%s waitingReason=%v restartCount=%d",
+			new.Name,
+			newCs.Name,
+			func() string {
+				if newCs.State.Waiting != nil {
+					return newCs.State.Waiting.Reason
+				}
+				return "nil"
+			}(),
+			newCs.RestartCount)
+	}
+
+	for _, newCs := range new.Status.ContainerStatuses {
+		// OOMKilled
 		if newCs.LastTerminationState.Terminated != nil &&
 			newCs.LastTerminationState.Terminated.Reason == "OOMKilled" {
 
@@ -55,33 +78,39 @@ func (d *IncidentDetector) OnPodUpdate(old, new *corev1.Pod) {
 				}
 			}
 
-			d.buildAndEmit(new, nil)
+			d.buildAndEmit(new, nil, d.oomBuilder)
 			return
 		}
 
-		if newCs.State.Waiting != nil &&
-			newCs.State.Waiting.Reason == "CrashLoopBackOff" &&
-			newCs.RestartCount >= 3 {
-
-			for _, oldCs := range old.Status.ContainerStatuses {
-				if oldCs.Name == newCs.Name && oldCs.RestartCount == newCs.RestartCount {
-					return // déjà émis pour ce restart count
-				}
+		// CrashLoopBackOff
+		if newCs.RestartCount >= 3 {
+			lastReason := ""
+			if newCs.LastTerminationState.Terminated != nil {
+				lastReason = newCs.LastTerminationState.Terminated.Reason
 			}
 
-			d.buildAndEmit(new, nil)
-			return
+			isCrashLoop := (newCs.State.Waiting != nil && newCs.State.Waiting.Reason == "CrashLoopBackOff") ||
+				(lastReason != "" && lastReason != "OOMKilled")
+
+			if isCrashLoop {
+				for _, oldCs := range old.Status.ContainerStatuses {
+					if oldCs.Name == newCs.Name && oldCs.RestartCount == newCs.RestartCount {
+						return
+					}
+				}
+				d.buildAndEmit(new, nil, d.crashLoopBuilder)
+				return
+			}
 		}
 	}
 }
 
-func (d *IncidentDetector) buildAndEmit(pod *corev1.Pod, event *corev1.Event) {
-	ctx, err := d.contextBuilder.Build(pod, event, d.rsLister)
+func (d *IncidentDetector) buildAndEmit(pod *corev1.Pod, event *corev1.Event, builder contextbuilder.ContextBuilder) {
+	ctx, err := builder.Build(pod, event, d.rsLister)
 	if err != nil {
 		fmt.Printf("[ERROR] failed to build context: %v\n", err)
 		return
 	}
-	// W2 console output kept for local dev visibility
 	fmt.Printf("[INCIDENT] %+v\n", ctx)
 	d.emitter.Emit(ctx)
 }
