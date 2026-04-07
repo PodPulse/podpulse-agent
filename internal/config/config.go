@@ -8,11 +8,13 @@ import (
 type Config struct {
 	BackendAddr string
 	ApiKey      string
+	Debug       bool
 }
 
 func Load() *Config {
 	backendFlag := flag.String("backend-addr", "", "gRPC backend address")
 	apiKeyFlag := flag.String("api-key", "", "PodPulse API key")
+	debugFlag := flag.Bool("debug", false, "Enable debug logging")
 	flag.Parse()
 
 	addr := os.Getenv("PODPULSE_BACKEND_ADDR")
@@ -28,8 +30,14 @@ func Load() *Config {
 		apiKey = *apiKeyFlag
 	}
 
+	debug := os.Getenv("PODPULSE_DEBUG") == "true"
+	if !debug {
+		debug = *debugFlag
+	}
+
 	return &Config{
 		BackendAddr: addr,
 		ApiKey:      apiKey,
+		Debug:       debug,
 	}
 }

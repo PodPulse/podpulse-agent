@@ -58,7 +58,7 @@ func main() {
 	logCollector := collector.New(clientset, 50)
 	oomBuilder := incidentcontext.NewOOMContextBuilder(logCollector)
 	crashLoopBuilder := incidentcontext.NewCrashLoopContextBuilder(logCollector)
-	d := detector.New(podLister, rsLister, oomBuilder, crashLoopBuilder, e)
+	d := detector.New(podLister, rsLister, oomBuilder, crashLoopBuilder, e, appConfig.Debug)
 
 	eventInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {

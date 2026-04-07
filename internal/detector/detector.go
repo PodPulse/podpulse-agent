@@ -18,6 +18,7 @@ type IncidentDetector struct {
 	oomBuilder       contextbuilder.ContextBuilder
 	crashLoopBuilder contextbuilder.ContextBuilder
 	emitter          *emitter.ReportEmitter
+	debug            bool
 }
 
 func New(
@@ -26,6 +27,7 @@ func New(
 	oomBuilder contextbuilder.ContextBuilder,
 	crashLoopBuilder contextbuilder.ContextBuilder,
 	e *emitter.ReportEmitter,
+	debug bool,
 ) *IncidentDetector {
 	return &IncidentDetector{
 		podLister:        podLister,
@@ -33,6 +35,7 @@ func New(
 		oomBuilder:       oomBuilder,
 		crashLoopBuilder: crashLoopBuilder,
 		emitter:          e,
+		debug:            debug,
 	}
 }
 
@@ -55,19 +58,20 @@ func (d *IncidentDetector) OnEvent(event *corev1.Event) {
 
 func (d *IncidentDetector) OnPodUpdate(old, new *corev1.Pod) {
 	for _, newCs := range new.Status.ContainerStatuses {
-		log.Printf("[DEBUG] pod=%s container=%s waitingReason=%v restartCount=%d",
-			new.Name,
-			newCs.Name,
-			func() string {
-				if newCs.State.Waiting != nil {
-					return newCs.State.Waiting.Reason
-				}
-				return "nil"
-			}(),
-			newCs.RestartCount)
-	}
 
-	for _, newCs := range new.Status.ContainerStatuses {
+		if d.debug {
+			log.Printf("[DEBUG] pod=%s container=%s waitingReason=%v restartCount=%d",
+				new.Name,
+				newCs.Name,
+				func() string {
+					if newCs.State.Waiting != nil {
+						return newCs.State.Waiting.Reason
+					}
+					return "nil"
+				}(),
+				newCs.RestartCount)
+		}
+
 		// OOMKilled
 		if newCs.LastTerminationState.Terminated != nil &&
 			newCs.LastTerminationState.Terminated.Reason == "OOMKilled" {

@@ -1,6 +1,6 @@
 # PodPulse Agent — Architecture
 
-> **Scope:** W1–W6
+> **Scope:** W1–W8
 > This document covers the in-cluster agent component hosted in this repository.
 > The PodPulse backend is a separate, private service.
 
@@ -62,19 +62,21 @@ It never calls any external AI API directly — all analysis happens in the back
 │            ┌─────────────────┐               │         │
 │            │IncidentDetector │◄──────────────┘         │
 │            │                 │                         │
-│            │ Pattern match   │                         │
 │            │ OOMKilled       │                         │
+│            │ CrashLoopBackOff│                         │
 │            └────────┬────────┘                         │
 │                     │                                  │
 │                     ▼                                  │
 │            ┌─────────────────┐                         │
 │            │ ContextBuilder  │                         │
+│            │ (per type)      │                         │
 │            │                 │                         │
-│            │ Assemble context│                         │
-│            │ Owner chain     │                         │
-│            │ Log tail        │                         │
-│            │ Bounded payload │                         │
-│            │ No secrets      │                         │
+│            │ OOMContextBuilder         │               │
+│            │ CrashLoopContextBuilder   │               │
+│            │ Owner chain resolution    │               │
+│            │ Log tail (previous ctr)   │               │
+│            │ Bounded payload           │               │
+│            │ No secrets                │               │
 │            └────────┬────────┘                         │
 │                     │                                  │
 │                     ▼                                  │
@@ -95,21 +97,22 @@ It never calls any external AI API directly — all analysis happens in the back
 | `EventWatcher` | Watch Kubernetes events via `client-go` informers | ✅ W1–W2 |
 | `PodWatcher` | Watch pod lifecycle and container status changes | ✅ W1–W2 |
 | `LogCollector` | Fetch container logs on incident trigger (bounded tail, previous container) | ✅ W4 |
-| `IncidentDetector` | OOMKilled detection — dual-path (event stream + pod status) | ✅ W2 |
-| `ContextBuilder` | Assemble incident context, owner chain, log tail, enforce payload size cap, strip secrets | ✅ W4 |
-| `ReportEmitter` | Send `IncidentReport` + `x-api-key` metadata via gRPC, retry with exponential backoff | ✅ W5 |
+| `IncidentDetector` | OOMKilled + CrashLoopBackOff detection | ✅ W8 |
+| `OOMContextBuilder` | Assemble OOMKilled context — memory limit, owner chain, log tail | ✅ W4 |
+| `CrashLoopContextBuilder` | Assemble CrashLoopBackOff context — exit code, last reason, owner chain, log tail | ✅ W8 |
+| `ReportEmitter` | Send `IncidentReport` + `x-api-key` via gRPC, retry with exponential backoff | ✅ W5 |
 
 ---
 
-## 3. Deployment (W6)
+## 3. Deployment (W6+)
 
 The agent is distributed as a Docker image and deployed via Helm.
 
 **Docker image:** `ghcr.io/podpulse/podpulse-agent`
-**Helm chart:** `https://github.com/PodPulse/podpulse-helm`
+**Helm chart:** `https://podpulse.github.io/podpulse-helm`
 
 **Image build:**
-- Base: `golang:1.25-alpine` (build) → `gcr.io/distroless/static-debian12` (runtime)
+- Base: `golang:1.23-alpine` (build) → `gcr.io/distroless/static-debian12` (runtime)
 - Final image: ~5MB, no shell, no package manager
 - Runs as `nonroot` (UID 65532)
 - Build flags: `CGO_ENABLED=0 -trimpath -ldflags="-w -s"`
@@ -120,12 +123,12 @@ helm repo add podpulse https://podpulse.github.io/podpulse-helm
 helm install podpulse-agent podpulse/podpulse-agent \
   --namespace podpulse \
   --create-namespace \
-  --set agent.backend.address=api.podpulse.io:443 \
+  --set agent.backend.address=api.podpulse.io:5051 \
   --set agent.backend.apiKey=pk_live_...
 ```
 
 **What the chart deploys:**
-- `Deployment` — the agent pod (1 replica)
+- `Deployment` — the agent pod (1 replica, `imagePullPolicy: Always`)
 - `ServiceAccount` — K8s identity
 - `ClusterRole` — read-only permissions
 - `ClusterRoleBinding` — binds ServiceAccount to ClusterRole
@@ -133,11 +136,13 @@ helm install podpulse-agent podpulse/podpulse-agent \
 
 **Automatic pod restart on secret change** via `checksum/secret` annotation on `spec.template`.
 
+**CI/CD (W8):**
+- `build.yml` — triggered on every push, runs `go build` + `go test`
+- `release.yml` — triggered on tag `v*`, builds and pushes `ghcr.io/podpulse/podpulse-agent:{tag}` + `:latest`
+
 ---
 
 ## 4. gRPC Contract (Agent → Backend)
-
-The agent communicates with the backend through a single gRPC service.
 
 ```protobuf
 syntax = "proto3";
@@ -150,7 +155,7 @@ service IncidentService {
 
 message IncidentReport {
   string incident_id    = 1;
-  string incident_type  = 2; // e.g. OOMKilled, CrashLoopBackOff
+  string incident_type  = 2; // OOMKilled | CrashLoopBackOff
   string namespace      = 3;
   string pod_name       = 4;
   string node_name      = 5;
@@ -165,21 +170,44 @@ message ReportAck {
 }
 ```
 
-**gRPC metadata (W5):**
+**gRPC metadata:**
 ```
-x-api-key: pk_live_Abc123...  // per-cluster API key — set via PODPULSE_API_KEY env var
+x-api-key: pk_live_...  // per-cluster API key
 ```
 
-> The `raw_context` field contains a structured JSON payload built by `ContextBuilder`.
-> Fields: `container`, `restart_count`, `memory_limit`, `memory_used_at_kill`,
-> `owner_kind`, `owner_name`, `log_tail`.
-> It never includes Kubernetes secrets or environment variable values.
+**`raw_context` fields by incident type:**
+
+OOMKilled:
+```json
+{
+  "container": "api",
+  "restart_count": 4,
+  "memory_limit": "256Mi",
+  "memory_used_at_kill": "",
+  "owner_kind": "Deployment",
+  "owner_name": "payment-api",
+  "log_tail": "..."
+}
+```
+
+CrashLoopBackOff:
+```json
+{
+  "container": "api",
+  "restart_count": 5,
+  "last_exit_code": 1,
+  "last_exit_reason": "Error",
+  "owner_kind": "Deployment",
+  "owner_name": "payment-api",
+  "log_tail": "..."
+}
+```
+
+> Kubernetes Secrets and environment variable values are never included in `raw_context`.
 
 ---
 
 ## 5. RBAC — Required Permissions
-
-The agent requires **read-only** access to the following resources:
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -206,34 +234,52 @@ rules:
 
 ---
 
-## 6. Incident Detection — Scope
+## 6. Incident Detection — W8 Scope
 
-Detection is intentionally narrow for the MVP.
-The goal is precision over recall: handle a small number of incident types well.
+| Incident Type | Detection Logic | Status |
+|---|---|---|
+| `OOMKilled` | `lastTerminationState.reason = OOMKilled` + restart count delta | ✅ W4 |
+| `CrashLoopBackOff` | `restartCount >= 3` + `lastExitReason != OOMKilled` + restart count delta | ✅ W8 |
+| `ImagePullBackOff` | — | 🔜 Post-MVP |
+| `FailedScheduling` | — | 🔜 Post-MVP |
+| `Pending (resource pressure)` | — | 🔜 Post-MVP |
 
-| Incident Type | Status |
-|---|---|
-| `OOMKilled` | ✅ W1–W4 |
-| `CrashLoopBackOff` | 🔜 W8+ |
-| `ImagePullBackOff` | 🔜 W8+ |
-| `FailedScheduling` | 🔜 Post-MVP |
-| `Pending (resource pressure)` | 🔜 Post-MVP |
+**CrashLoopBackOff trigger policy:**
+
+The agent does not rely on `State.Waiting.Reason = CrashLoopBackOff` alone — this state is ephemeral and may not be present at the exact moment the informer fires. Instead:
+
+1. `restartCount >= 3`
+2. `lastTerminationState.Terminated != nil`
+3. `lastTerminationState.Terminated.Reason != OOMKilled` (OOMKilled is handled separately)
+4. `restartCount` changed between old and new pod state (dedup guard)
+
+**Anti-burst local guard:** A `ConcurrentMap` with a 10-minute TTL prevents the agent from emitting multiple reports for the same pod during a rapid crash cycle. This is not the deduplication source of truth — that lives in the backend (Redis + DB).
 
 ---
 
-## 7. Security Principles
+## 7. Configuration
+
+| Flag | Env var | Default | Description |
+|---|---|---|---|
+| `--backend-addr` | `PODPULSE_BACKEND_ADDR` | `localhost:5051` | gRPC backend address |
+| `--api-key` | `PODPULSE_API_KEY` | — | Per-cluster API key |
+| `--debug` | `PODPULSE_DEBUG=true` | `false` | Enable debug logging (container state on every pod update) |
+
+---
+
+## 8. Security Principles
 
 - **Read-only** — the agent holds no write permissions, ever
 - **No secrets** — Kubernetes secrets and environment variable values are never collected or transmitted
-- **Bounded payload** — incident context is size-capped before transmission; the backend enforces the corresponding AI inference budget
+- **Bounded payload** — incident context is size-capped before transmission
 - **No direct AI calls** — the agent never calls Claude or any external AI API
-- **API key auth** — every gRPC call carries a per-cluster API key in metadata (`x-api-key`); key stored in a Kubernetes Secret
+- **API key auth** — every gRPC call carries a per-cluster API key in metadata
 - **Minimal image** — distroless runtime, no shell, runs as nonroot
 - **Optional anonymization** — pod names and namespaces can be anonymized before transmission (future)
 
 ---
 
-## 8. Architectural Decision Records
+## 9. Architectural Decision Records
 
 ### ADR-001 — Go for the in-cluster agent
 **Decision:** The agent is written in Go.
@@ -245,44 +291,50 @@ The goal is precision over recall: handle a small number of incident types well.
 
 ### ADR-003 — Bounded payload size
 **Decision:** `ContextBuilder` enforces a hard payload size cap on the incident context before transmission.
-**Rationale:** The agent has no knowledge of AI inference budgets — that is a backend concern. The cap is expressed in bytes at the agent level. The backend is responsible for mapping that to its own token limit. This keeps the abstraction boundary clean and prevents log dumps from inflating payloads regardless of what the backend does with them.
+**Rationale:** The agent has no knowledge of AI inference budgets — that is a backend concern. The cap is expressed in bytes at the agent level. The backend is responsible for mapping that to its own token limit.
 
 ### ADR-004 — No direct AI calls from the agent
 **Decision:** The agent never calls Claude or any external AI API.
 **Rationale:** Separation of concerns. The agent observes and assembles context — it does not analyze. This also keeps the agent's network policy simple: egress to the backend endpoint only.
 
 ### ADR-005 — Precision over recall for incident detection
-**Decision:** OOMKilled is the first incident type. Additional types are added iteratively based on design partner feedback.
+**Decision:** W8 covers OOMKilled and CrashLoopBackOff. Additional types are added iteratively based on design partner feedback.
 **Rationale:** A small number of well-handled incident types produces better diagnostics and higher SRE trust than broad but shallow coverage.
 
 ### ADR-006 — Dual-path OOMKilled detection
-**Decision:** OOMKilled is detected via two complementary paths: event stream (`OOMKilling` reason) and pod status (`containerStatus.lastTerminationState.reason = OOMKilled`).
-**Rationale:** Observed empirically on k3s — the `OOMKilling` event is not emitted by all runtimes. Relying on events alone produces false negatives. The pod status path is always populated regardless of runtime. Both paths are active simultaneously; the event path is kept for runtimes that do emit it. Re-triggering is prevented by comparing `restartCount` between old and new pod state.
-**Known limitation:** Tested on k3s (containerd) only. Compatibility with CRI-O to be validated before first design partner onboarding.
+**Decision:** OOMKilled is detected via two complementary paths: event stream (`OOMKilling` reason) and pod status (`lastTerminationState.reason = OOMKilled`).
+**Rationale:** Observed empirically on k3s — the `OOMKilling` event is not emitted by all runtimes. Both paths are active simultaneously.
 
 ### ADR-007 — ReportEmitter retry with exponential backoff
-**Decision:** `ReportEmitter` retries failed gRPC calls up to 3 times with exponential backoff (500ms base delay). After all retries are exhausted, the error is logged and the agent continues — it never crashes.
-**Rationale:** The backend may be temporarily unavailable (restart, deploy, network blip). The agent must remain operational regardless. Incidents are best-effort at this stage — deduplication and guaranteed delivery come with Redis in W5+.
+**Decision:** `ReportEmitter` retries failed gRPC calls up to 3 times with exponential backoff (500ms base delay). After all retries are exhausted, the error is logged and the agent continues.
+**Rationale:** The backend may be temporarily unavailable. The agent must remain operational regardless.
 
-### ADR-008 — Per-cluster API key authentication (W5)
-**Decision:** The agent sends a per-cluster API key in gRPC metadata (`x-api-key`) on every call. The key is stored in a Kubernetes Secret and injected via Helm values.
-**Rationale:** The backend is multi-tenant — it must identify which cluster is sending each incident report. API key per cluster gives fine-grained revocation (one compromised cluster does not affect others) and maps cleanly to Kubernetes Secrets for secure storage in-cluster.
+### ADR-008 — Per-cluster API key authentication
+**Decision:** The agent sends a per-cluster API key in gRPC metadata (`x-api-key`) on every call.
+**Rationale:** The backend is multi-tenant. API key per cluster gives fine-grained revocation.
 
-### ADR-009 — Distroless runtime image (W6)
+### ADR-009 — Distroless runtime image
 **Decision:** The agent runs on `gcr.io/distroless/static-debian12` with no shell and no package manager.
-**Rationale:** Minimal attack surface for an in-cluster component with broad read permissions. No shell means no command injection even if the container is compromised. Consistent with enterprise security requirements (Elia).
+**Rationale:** Minimal attack surface for an in-cluster component with broad read permissions.
 
-### ADR-010 — Helm for deployment (W6)
+### ADR-010 — Helm for deployment
 **Decision:** The agent is distributed and deployed via Helm chart from a dedicated `podpulse-helm` repository.
-**Rationale:** Helm is the de facto standard for Kubernetes application packaging. A dedicated chart repo allows independent versioning of the chart and the agent binary, and enables `helm repo add` for easy installation by design partners.
+**Rationale:** Helm is the de facto standard for Kubernetes application packaging. Enables `helm repo add` for easy installation by design partners.
+
+### ADR-011 — Per-type ContextBuilder (W8)
+**Decision:** Each incident type has its own `ContextBuilder` implementation (`OOMContextBuilder`, `CrashLoopContextBuilder`). The `IncidentDetector` selects the appropriate builder and passes it to `buildAndEmit`.
+**Rationale:** OOMKilled and CrashLoopBackOff require different fields — memory limit vs exit code, different container status fields. A single generic builder would require nullable fields and conditional logic. Separate builders keep each type self-contained and independently testable.
+
+### ADR-012 — CrashLoopBackOff trigger on restartCount, not Waiting.Reason (W8)
+**Decision:** CrashLoopBackOff is triggered on `restartCount >= 3` + `lastExitReason != OOMKilled`, not on `State.Waiting.Reason = CrashLoopBackOff`.
+**Rationale:** `State.Waiting.Reason` is ephemeral — the informer may fire when the container is in `Running` or `Terminated` state. `lastTerminationState` is stable and always populated after a crash. Empirically validated on k3d.
 
 ---
 
-## 9. Out of Scope — current
+## 10. Out of Scope — current
 
 - UI / dashboard
 - Multi-cluster support per tenant
 - Prometheus metrics / Grafana integration
-- Incident types beyond OOMKilled (W8+)
+- Incident types beyond OOMKilled and CrashLoopBackOff
 - Payload anonymization
-- CI/CD for image build (W8+)
