@@ -7,8 +7,10 @@ import (
 	"math"
 	"time"
 
+	"crypto/tls"
+
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 
 	incidentcontext "github.com/PodPulse/podpulse-agent/internal/context"
@@ -26,9 +28,10 @@ type ReportEmitter struct {
 }
 
 func New(backendAddr string, apiKey string) (*ReportEmitter, error) {
+	creds := credentials.NewTLS(&tls.Config{})
 	conn, err := grpc.NewClient(
 		backendAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(creds),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to backend at %s: %w", backendAddr, err)
