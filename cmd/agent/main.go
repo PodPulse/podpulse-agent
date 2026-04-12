@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -42,7 +43,12 @@ func main() {
 		panic(fmt.Sprintf("failed to create clientset: %v", err))
 	}
 
-	e, err := emitter.New(appConfig.BackendAddr, appConfig.ApiKey)
+	dynamicClient, err := dynamic.NewForConfig(k8sConfig)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create dynamic client: %v", err))
+	}
+
+	e, err := emitter.New(appConfig.BackendAddr, appConfig.ApiKey, appConfig.Insecure)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create emitter: %v", err))
 	}
@@ -56,8 +62,10 @@ func main() {
 	rsLister := factory.Apps().V1().ReplicaSets().Lister()
 
 	logCollector := collector.New(clientset, 50)
-	oomBuilder := incidentcontext.NewOOMContextBuilder(logCollector)
-	crashLoopBuilder := incidentcontext.NewCrashLoopContextBuilder(logCollector)
+	manifestBuilder := incidentcontext.NewManifestContextBuilder(dynamicClient, appConfig.ArgoCDNamespace)
+	deployBuilder := incidentcontext.NewDeployContextBuilder(rsLister)
+	oomBuilder := incidentcontext.NewOOMContextBuilder(logCollector, manifestBuilder, deployBuilder)
+	crashLoopBuilder := incidentcontext.NewCrashLoopContextBuilder(logCollector, manifestBuilder, deployBuilder)
 	d := detector.New(podLister, rsLister, oomBuilder, crashLoopBuilder, e, appConfig.Debug)
 
 	eventInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{

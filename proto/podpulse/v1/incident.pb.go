@@ -21,23 +21,242 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type IncidentReport struct {
+type ManifestContext struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	GitOpsTool      string                 `protobuf:"bytes,1,opt,name=git_ops_tool,json=gitOpsTool,proto3" json:"git_ops_tool,omitempty"`
+	GitOpsAppName   string                 `protobuf:"bytes,2,opt,name=git_ops_app_name,json=gitOpsAppName,proto3" json:"git_ops_app_name,omitempty"`
+	IsHelmManaged   bool                   `protobuf:"varint,3,opt,name=is_helm_managed,json=isHelmManaged,proto3" json:"is_helm_managed,omitempty"`
+	HelmReleaseName string                 `protobuf:"bytes,4,opt,name=helm_release_name,json=helmReleaseName,proto3" json:"helm_release_name,omitempty"`
+	HelmChart       string                 `protobuf:"bytes,5,opt,name=helm_chart,json=helmChart,proto3" json:"helm_chart,omitempty"`
+	HelmNamespace   string                 `protobuf:"bytes,6,opt,name=helm_namespace,json=helmNamespace,proto3" json:"helm_namespace,omitempty"`
+	// ArgoCD-specific enrichment (populated when tracking-id annotation is present)
+	ArgoResourceName string `protobuf:"bytes,7,opt,name=argo_resource_name,json=argoResourceName,proto3" json:"argo_resource_name,omitempty"` // e.g. "oom-argo"    — from tracking-id {ns}/{name}
+	ArgoResourceKind string `protobuf:"bytes,8,opt,name=argo_resource_kind,json=argoResourceKind,proto3" json:"argo_resource_kind,omitempty"` // e.g. "Deployment"  — from tracking-id {group}/{kind}
+	ArgoAppPath      string `protobuf:"bytes,9,opt,name=argo_app_path,json=argoAppPath,proto3" json:"argo_app_path,omitempty"`                // e.g. "argo/"       — from Application CR spec.source.path
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ManifestContext) Reset() {
+	*x = ManifestContext{}
+	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ManifestContext) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ManifestContext) ProtoMessage() {}
+
+func (x *ManifestContext) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ManifestContext.ProtoReflect.Descriptor instead.
+func (*ManifestContext) Descriptor() ([]byte, []int) {
+	return file_proto_podpulse_v1_incident_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ManifestContext) GetGitOpsTool() string {
+	if x != nil {
+		return x.GitOpsTool
+	}
+	return ""
+}
+
+func (x *ManifestContext) GetGitOpsAppName() string {
+	if x != nil {
+		return x.GitOpsAppName
+	}
+	return ""
+}
+
+func (x *ManifestContext) GetIsHelmManaged() bool {
+	if x != nil {
+		return x.IsHelmManaged
+	}
+	return false
+}
+
+func (x *ManifestContext) GetHelmReleaseName() string {
+	if x != nil {
+		return x.HelmReleaseName
+	}
+	return ""
+}
+
+func (x *ManifestContext) GetHelmChart() string {
+	if x != nil {
+		return x.HelmChart
+	}
+	return ""
+}
+
+func (x *ManifestContext) GetHelmNamespace() string {
+	if x != nil {
+		return x.HelmNamespace
+	}
+	return ""
+}
+
+func (x *ManifestContext) GetArgoResourceName() string {
+	if x != nil {
+		return x.ArgoResourceName
+	}
+	return ""
+}
+
+func (x *ManifestContext) GetArgoResourceKind() string {
+	if x != nil {
+		return x.ArgoResourceKind
+	}
+	return ""
+}
+
+func (x *ManifestContext) GetArgoAppPath() string {
+	if x != nil {
+		return x.ArgoAppPath
+	}
+	return ""
+}
+
+type RecentDeploy struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	DeployedAt     int64                  `protobuf:"varint,1,opt,name=deployed_at,json=deployedAt,proto3" json:"deployed_at,omitempty"` // Unix timestamp UTC
+	ImageTag       string                 `protobuf:"bytes,2,opt,name=image_tag,json=imageTag,proto3" json:"image_tag,omitempty"`
+	ReplicaSetName string                 `protobuf:"bytes,3,opt,name=replica_set_name,json=replicaSetName,proto3" json:"replica_set_name,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RecentDeploy) Reset() {
+	*x = RecentDeploy{}
+	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecentDeploy) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecentDeploy) ProtoMessage() {}
+
+func (x *RecentDeploy) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecentDeploy.ProtoReflect.Descriptor instead.
+func (*RecentDeploy) Descriptor() ([]byte, []int) {
+	return file_proto_podpulse_v1_incident_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *RecentDeploy) GetDeployedAt() int64 {
+	if x != nil {
+		return x.DeployedAt
+	}
+	return 0
+}
+
+func (x *RecentDeploy) GetImageTag() string {
+	if x != nil {
+		return x.ImageTag
+	}
+	return ""
+}
+
+func (x *RecentDeploy) GetReplicaSetName() string {
+	if x != nil {
+		return x.ReplicaSetName
+	}
+	return ""
+}
+
+type DeployContext struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	IncidentId    string                 `protobuf:"bytes,1,opt,name=incident_id,json=incidentId,proto3" json:"incident_id,omitempty"`
-	IncidentType  string                 `protobuf:"bytes,2,opt,name=incident_type,json=incidentType,proto3" json:"incident_type,omitempty"` // e.g. OOMKilled, CrashLoopBackOff
-	Namespace     string                 `protobuf:"bytes,3,opt,name=namespace,proto3" json:"namespace,omitempty"`
-	PodName       string                 `protobuf:"bytes,4,opt,name=pod_name,json=podName,proto3" json:"pod_name,omitempty"`
-	NodeName      string                 `protobuf:"bytes,5,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
-	RestartCount  int32                  `protobuf:"varint,6,opt,name=restart_count,json=restartCount,proto3" json:"restart_count,omitempty"`
-	RawContext    string                 `protobuf:"bytes,7,opt,name=raw_context,json=rawContext,proto3" json:"raw_context,omitempty"`  // JSON-serialized, size-bounded
-	DetectedAt    int64                  `protobuf:"varint,8,opt,name=detected_at,json=detectedAt,proto3" json:"detected_at,omitempty"` // Unix timestamp (UTC)
+	RecentDeploys []*RecentDeploy        `protobuf:"bytes,1,rep,name=recent_deploys,json=recentDeploys,proto3" json:"recent_deploys,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
+func (x *DeployContext) Reset() {
+	*x = DeployContext{}
+	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeployContext) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeployContext) ProtoMessage() {}
+
+func (x *DeployContext) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeployContext.ProtoReflect.Descriptor instead.
+func (*DeployContext) Descriptor() ([]byte, []int) {
+	return file_proto_podpulse_v1_incident_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *DeployContext) GetRecentDeploys() []*RecentDeploy {
+	if x != nil {
+		return x.RecentDeploys
+	}
+	return nil
+}
+
+type IncidentReport struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	IncidentId      string                 `protobuf:"bytes,1,opt,name=incident_id,json=incidentId,proto3" json:"incident_id,omitempty"`
+	IncidentType    string                 `protobuf:"bytes,2,opt,name=incident_type,json=incidentType,proto3" json:"incident_type,omitempty"` // e.g. OOMKilled, CrashLoopBackOff
+	Namespace       string                 `protobuf:"bytes,3,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	PodName         string                 `protobuf:"bytes,4,opt,name=pod_name,json=podName,proto3" json:"pod_name,omitempty"`
+	NodeName        string                 `protobuf:"bytes,5,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
+	RestartCount    int32                  `protobuf:"varint,6,opt,name=restart_count,json=restartCount,proto3" json:"restart_count,omitempty"`
+	RawContext      string                 `protobuf:"bytes,7,opt,name=raw_context,json=rawContext,proto3" json:"raw_context,omitempty"`  // JSON-serialized, size-bounded
+	DetectedAt      int64                  `protobuf:"varint,8,opt,name=detected_at,json=detectedAt,proto3" json:"detected_at,omitempty"` // Unix timestamp (UTC)
+	ManifestContext *ManifestContext       `protobuf:"bytes,9,opt,name=manifest_context,json=manifestContext,proto3" json:"manifest_context,omitempty"`
+	DeployContext   *DeployContext         `protobuf:"bytes,10,opt,name=deploy_context,json=deployContext,proto3" json:"deploy_context,omitempty"`
+	PreviousLogTail string                 `protobuf:"bytes,11,opt,name=previous_log_tail,json=previousLogTail,proto3" json:"previous_log_tail,omitempty"`
+	MemoryRequest   string                 `protobuf:"bytes,12,opt,name=memory_request,json=memoryRequest,proto3" json:"memory_request,omitempty"`
+	CpuLimit        string                 `protobuf:"bytes,13,opt,name=cpu_limit,json=cpuLimit,proto3" json:"cpu_limit,omitempty"`
+	CpuRequest      string                 `protobuf:"bytes,14,opt,name=cpu_request,json=cpuRequest,proto3" json:"cpu_request,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
 func (x *IncidentReport) Reset() {
 	*x = IncidentReport{}
-	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[0]
+	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -49,7 +268,7 @@ func (x *IncidentReport) String() string {
 func (*IncidentReport) ProtoMessage() {}
 
 func (x *IncidentReport) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[0]
+	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -62,7 +281,7 @@ func (x *IncidentReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IncidentReport.ProtoReflect.Descriptor instead.
 func (*IncidentReport) Descriptor() ([]byte, []int) {
-	return file_proto_podpulse_v1_incident_proto_rawDescGZIP(), []int{0}
+	return file_proto_podpulse_v1_incident_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *IncidentReport) GetIncidentId() string {
@@ -121,6 +340,48 @@ func (x *IncidentReport) GetDetectedAt() int64 {
 	return 0
 }
 
+func (x *IncidentReport) GetManifestContext() *ManifestContext {
+	if x != nil {
+		return x.ManifestContext
+	}
+	return nil
+}
+
+func (x *IncidentReport) GetDeployContext() *DeployContext {
+	if x != nil {
+		return x.DeployContext
+	}
+	return nil
+}
+
+func (x *IncidentReport) GetPreviousLogTail() string {
+	if x != nil {
+		return x.PreviousLogTail
+	}
+	return ""
+}
+
+func (x *IncidentReport) GetMemoryRequest() string {
+	if x != nil {
+		return x.MemoryRequest
+	}
+	return ""
+}
+
+func (x *IncidentReport) GetCpuLimit() string {
+	if x != nil {
+		return x.CpuLimit
+	}
+	return ""
+}
+
+func (x *IncidentReport) GetCpuRequest() string {
+	if x != nil {
+		return x.CpuRequest
+	}
+	return ""
+}
+
 type ReportAck struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	IncidentId    string                 `protobuf:"bytes,1,opt,name=incident_id,json=incidentId,proto3" json:"incident_id,omitempty"`
@@ -131,7 +392,7 @@ type ReportAck struct {
 
 func (x *ReportAck) Reset() {
 	*x = ReportAck{}
-	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[1]
+	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -143,7 +404,7 @@ func (x *ReportAck) String() string {
 func (*ReportAck) ProtoMessage() {}
 
 func (x *ReportAck) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[1]
+	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -156,7 +417,7 @@ func (x *ReportAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportAck.ProtoReflect.Descriptor instead.
 func (*ReportAck) Descriptor() ([]byte, []int) {
-	return file_proto_podpulse_v1_incident_proto_rawDescGZIP(), []int{1}
+	return file_proto_podpulse_v1_incident_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ReportAck) GetIncidentId() string {
@@ -177,7 +438,26 @@ var File_proto_podpulse_v1_incident_proto protoreflect.FileDescriptor
 
 const file_proto_podpulse_v1_incident_proto_rawDesc = "" +
 	"\n" +
-	" proto/podpulse/v1/incident.proto\x12\vpodpulse.v1\"\x93\x02\n" +
+	" proto/podpulse/v1/incident.proto\x12\vpodpulse.v1\"\xf6\x02\n" +
+	"\x0fManifestContext\x12 \n" +
+	"\fgit_ops_tool\x18\x01 \x01(\tR\n" +
+	"gitOpsTool\x12'\n" +
+	"\x10git_ops_app_name\x18\x02 \x01(\tR\rgitOpsAppName\x12&\n" +
+	"\x0fis_helm_managed\x18\x03 \x01(\bR\risHelmManaged\x12*\n" +
+	"\x11helm_release_name\x18\x04 \x01(\tR\x0fhelmReleaseName\x12\x1d\n" +
+	"\n" +
+	"helm_chart\x18\x05 \x01(\tR\thelmChart\x12%\n" +
+	"\x0ehelm_namespace\x18\x06 \x01(\tR\rhelmNamespace\x12,\n" +
+	"\x12argo_resource_name\x18\a \x01(\tR\x10argoResourceName\x12,\n" +
+	"\x12argo_resource_kind\x18\b \x01(\tR\x10argoResourceKind\x12\"\n" +
+	"\rargo_app_path\x18\t \x01(\tR\vargoAppPath\"v\n" +
+	"\fRecentDeploy\x12\x1f\n" +
+	"\vdeployed_at\x18\x01 \x01(\x03R\n" +
+	"deployedAt\x12\x1b\n" +
+	"\timage_tag\x18\x02 \x01(\tR\bimageTag\x12(\n" +
+	"\x10replica_set_name\x18\x03 \x01(\tR\x0ereplicaSetName\"Q\n" +
+	"\rDeployContext\x12@\n" +
+	"\x0erecent_deploys\x18\x01 \x03(\v2\x19.podpulse.v1.RecentDeployR\rrecentDeploys\"\xb0\x04\n" +
 	"\x0eIncidentReport\x12\x1f\n" +
 	"\vincident_id\x18\x01 \x01(\tR\n" +
 	"incidentId\x12#\n" +
@@ -189,7 +469,15 @@ const file_proto_podpulse_v1_incident_proto_rawDesc = "" +
 	"\vraw_context\x18\a \x01(\tR\n" +
 	"rawContext\x12\x1f\n" +
 	"\vdetected_at\x18\b \x01(\x03R\n" +
-	"detectedAt\"H\n" +
+	"detectedAt\x12G\n" +
+	"\x10manifest_context\x18\t \x01(\v2\x1c.podpulse.v1.ManifestContextR\x0fmanifestContext\x12A\n" +
+	"\x0edeploy_context\x18\n" +
+	" \x01(\v2\x1a.podpulse.v1.DeployContextR\rdeployContext\x12*\n" +
+	"\x11previous_log_tail\x18\v \x01(\tR\x0fpreviousLogTail\x12%\n" +
+	"\x0ememory_request\x18\f \x01(\tR\rmemoryRequest\x12\x1b\n" +
+	"\tcpu_limit\x18\r \x01(\tR\bcpuLimit\x12\x1f\n" +
+	"\vcpu_request\x18\x0e \x01(\tR\n" +
+	"cpuRequest\"H\n" +
 	"\tReportAck\x12\x1f\n" +
 	"\vincident_id\x18\x01 \x01(\tR\n" +
 	"incidentId\x12\x1a\n" +
@@ -209,19 +497,25 @@ func file_proto_podpulse_v1_incident_proto_rawDescGZIP() []byte {
 	return file_proto_podpulse_v1_incident_proto_rawDescData
 }
 
-var file_proto_podpulse_v1_incident_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_proto_podpulse_v1_incident_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_proto_podpulse_v1_incident_proto_goTypes = []any{
-	(*IncidentReport)(nil), // 0: podpulse.v1.IncidentReport
-	(*ReportAck)(nil),      // 1: podpulse.v1.ReportAck
+	(*ManifestContext)(nil), // 0: podpulse.v1.ManifestContext
+	(*RecentDeploy)(nil),    // 1: podpulse.v1.RecentDeploy
+	(*DeployContext)(nil),   // 2: podpulse.v1.DeployContext
+	(*IncidentReport)(nil),  // 3: podpulse.v1.IncidentReport
+	(*ReportAck)(nil),       // 4: podpulse.v1.ReportAck
 }
 var file_proto_podpulse_v1_incident_proto_depIdxs = []int32{
-	0, // 0: podpulse.v1.IncidentService.ReportIncident:input_type -> podpulse.v1.IncidentReport
-	1, // 1: podpulse.v1.IncidentService.ReportIncident:output_type -> podpulse.v1.ReportAck
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	1, // 0: podpulse.v1.DeployContext.recent_deploys:type_name -> podpulse.v1.RecentDeploy
+	0, // 1: podpulse.v1.IncidentReport.manifest_context:type_name -> podpulse.v1.ManifestContext
+	2, // 2: podpulse.v1.IncidentReport.deploy_context:type_name -> podpulse.v1.DeployContext
+	3, // 3: podpulse.v1.IncidentService.ReportIncident:input_type -> podpulse.v1.IncidentReport
+	4, // 4: podpulse.v1.IncidentService.ReportIncident:output_type -> podpulse.v1.ReportAck
+	4, // [4:5] is the sub-list for method output_type
+	3, // [3:4] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_proto_podpulse_v1_incident_proto_init() }
@@ -235,7 +529,7 @@ func file_proto_podpulse_v1_incident_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_podpulse_v1_incident_proto_rawDesc), len(file_proto_podpulse_v1_incident_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
