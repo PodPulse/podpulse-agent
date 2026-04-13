@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	IncidentService_ReportIncident_FullMethodName = "/podpulse.v1.IncidentService/ReportIncident"
+	IncidentService_ReportIncident_FullMethodName  = "/podpulse.v1.IncidentService/ReportIncident"
+	IncidentService_ReportHeartbeat_FullMethodName = "/podpulse.v1.IncidentService/ReportHeartbeat"
 )
 
 // IncidentServiceClient is the client API for IncidentService service.
@@ -27,6 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type IncidentServiceClient interface {
 	ReportIncident(ctx context.Context, in *IncidentReport, opts ...grpc.CallOption) (*ReportAck, error)
+	ReportHeartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatAck, error)
 }
 
 type incidentServiceClient struct {
@@ -47,11 +49,22 @@ func (c *incidentServiceClient) ReportIncident(ctx context.Context, in *Incident
 	return out, nil
 }
 
+func (c *incidentServiceClient) ReportHeartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatAck, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HeartbeatAck)
+	err := c.cc.Invoke(ctx, IncidentService_ReportHeartbeat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // IncidentServiceServer is the server API for IncidentService service.
 // All implementations must embed UnimplementedIncidentServiceServer
 // for forward compatibility.
 type IncidentServiceServer interface {
 	ReportIncident(context.Context, *IncidentReport) (*ReportAck, error)
+	ReportHeartbeat(context.Context, *HeartbeatRequest) (*HeartbeatAck, error)
 	mustEmbedUnimplementedIncidentServiceServer()
 }
 
@@ -64,6 +77,9 @@ type UnimplementedIncidentServiceServer struct{}
 
 func (UnimplementedIncidentServiceServer) ReportIncident(context.Context, *IncidentReport) (*ReportAck, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportIncident not implemented")
+}
+func (UnimplementedIncidentServiceServer) ReportHeartbeat(context.Context, *HeartbeatRequest) (*HeartbeatAck, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportHeartbeat not implemented")
 }
 func (UnimplementedIncidentServiceServer) mustEmbedUnimplementedIncidentServiceServer() {}
 func (UnimplementedIncidentServiceServer) testEmbeddedByValue()                         {}
@@ -104,6 +120,24 @@ func _IncidentService_ReportIncident_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IncidentService_ReportHeartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HeartbeatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IncidentServiceServer).ReportHeartbeat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IncidentService_ReportHeartbeat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IncidentServiceServer).ReportHeartbeat(ctx, req.(*HeartbeatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // IncidentService_ServiceDesc is the grpc.ServiceDesc for IncidentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -114,6 +148,10 @@ var IncidentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReportIncident",
 			Handler:    _IncidentService_ReportIncident_Handler,
+		},
+		{
+			MethodName: "ReportHeartbeat",
+			Handler:    _IncidentService_ReportHeartbeat_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

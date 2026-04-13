@@ -5,7 +5,8 @@ package podpulse.v1;
 option go_package = "github.com/podpulse/podpulse-agent/proto/podpulse/v1;v1";
 
 service IncidentService {
-  rpc ReportIncident (IncidentReport) returns (ReportAck);
+  rpc ReportIncident  (IncidentReport)   returns (ReportAck);
+  rpc ReportHeartbeat (HeartbeatRequest) returns (HeartbeatAck);
 }
 
 message ManifestContext {
@@ -51,4 +52,13 @@ message IncidentReport {
 message ReportAck {
   string incident_id = 1;
   bool   accepted    = 2;
+}
+
+message HeartbeatRequest {
+  string agent_version = 1;
+  string cluster_name  = 2;
+}
+
+message HeartbeatAck {
+  int64 server_time = 1; // UTC Unix timestamp
 }

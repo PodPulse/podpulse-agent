@@ -48,6 +48,22 @@ func New(backendAddr string, apiKey string, insecureMode bool) (*ReportEmitter, 
 	}, nil
 }
 
+// SendHeartbeat sends a liveness ping to the backend. Non-fatal on error.
+func (e *ReportEmitter) SendHeartbeat(agentVersion, clusterName string) {
+	outCtx := metadata.NewOutgoingContext(
+		context.Background(),
+		metadata.Pairs("x-api-key", e.apiKey),
+	)
+
+	_, err := e.client.ReportHeartbeat(outCtx, &pb.HeartbeatRequest{
+		AgentVersion: agentVersion,
+		ClusterName:  clusterName,
+	})
+	if err != nil {
+		fmt.Printf("[WARN] heartbeat failed: %v\n", err)
+	}
+}
+
 func (e *ReportEmitter) Emit(ctx *incidentcontext.IncidentContext) {
 	report := &pb.IncidentReport{
 		IncidentId:      generateID(ctx),

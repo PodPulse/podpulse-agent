@@ -434,6 +434,102 @@ func (x *ReportAck) GetAccepted() bool {
 	return false
 }
 
+type HeartbeatRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AgentVersion  string                 `protobuf:"bytes,1,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
+	ClusterName   string                 `protobuf:"bytes,2,opt,name=cluster_name,json=clusterName,proto3" json:"cluster_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HeartbeatRequest) Reset() {
+	*x = HeartbeatRequest{}
+	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HeartbeatRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HeartbeatRequest) ProtoMessage() {}
+
+func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HeartbeatRequest.ProtoReflect.Descriptor instead.
+func (*HeartbeatRequest) Descriptor() ([]byte, []int) {
+	return file_proto_podpulse_v1_incident_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *HeartbeatRequest) GetAgentVersion() string {
+	if x != nil {
+		return x.AgentVersion
+	}
+	return ""
+}
+
+func (x *HeartbeatRequest) GetClusterName() string {
+	if x != nil {
+		return x.ClusterName
+	}
+	return ""
+}
+
+type HeartbeatAck struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ServerTime    int64                  `protobuf:"varint,1,opt,name=server_time,json=serverTime,proto3" json:"server_time,omitempty"` // UTC Unix timestamp
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HeartbeatAck) Reset() {
+	*x = HeartbeatAck{}
+	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HeartbeatAck) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HeartbeatAck) ProtoMessage() {}
+
+func (x *HeartbeatAck) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_podpulse_v1_incident_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HeartbeatAck.ProtoReflect.Descriptor instead.
+func (*HeartbeatAck) Descriptor() ([]byte, []int) {
+	return file_proto_podpulse_v1_incident_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *HeartbeatAck) GetServerTime() int64 {
+	if x != nil {
+		return x.ServerTime
+	}
+	return 0
+}
+
 var File_proto_podpulse_v1_incident_proto protoreflect.FileDescriptor
 
 const file_proto_podpulse_v1_incident_proto_rawDesc = "" +
@@ -481,9 +577,16 @@ const file_proto_podpulse_v1_incident_proto_rawDesc = "" +
 	"\tReportAck\x12\x1f\n" +
 	"\vincident_id\x18\x01 \x01(\tR\n" +
 	"incidentId\x12\x1a\n" +
-	"\baccepted\x18\x02 \x01(\bR\baccepted2X\n" +
+	"\baccepted\x18\x02 \x01(\bR\baccepted\"Z\n" +
+	"\x10HeartbeatRequest\x12#\n" +
+	"\ragent_version\x18\x01 \x01(\tR\fagentVersion\x12!\n" +
+	"\fcluster_name\x18\x02 \x01(\tR\vclusterName\"/\n" +
+	"\fHeartbeatAck\x12\x1f\n" +
+	"\vserver_time\x18\x01 \x01(\x03R\n" +
+	"serverTime2\xa5\x01\n" +
 	"\x0fIncidentService\x12E\n" +
-	"\x0eReportIncident\x12\x1b.podpulse.v1.IncidentReport\x1a\x16.podpulse.v1.ReportAckB9Z7github.com/podpulse/podpulse-agent/proto/podpulse/v1;v1b\x06proto3"
+	"\x0eReportIncident\x12\x1b.podpulse.v1.IncidentReport\x1a\x16.podpulse.v1.ReportAck\x12K\n" +
+	"\x0fReportHeartbeat\x12\x1d.podpulse.v1.HeartbeatRequest\x1a\x19.podpulse.v1.HeartbeatAckB9Z7github.com/podpulse/podpulse-agent/proto/podpulse/v1;v1b\x06proto3"
 
 var (
 	file_proto_podpulse_v1_incident_proto_rawDescOnce sync.Once
@@ -497,22 +600,26 @@ func file_proto_podpulse_v1_incident_proto_rawDescGZIP() []byte {
 	return file_proto_podpulse_v1_incident_proto_rawDescData
 }
 
-var file_proto_podpulse_v1_incident_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_proto_podpulse_v1_incident_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_proto_podpulse_v1_incident_proto_goTypes = []any{
-	(*ManifestContext)(nil), // 0: podpulse.v1.ManifestContext
-	(*RecentDeploy)(nil),    // 1: podpulse.v1.RecentDeploy
-	(*DeployContext)(nil),   // 2: podpulse.v1.DeployContext
-	(*IncidentReport)(nil),  // 3: podpulse.v1.IncidentReport
-	(*ReportAck)(nil),       // 4: podpulse.v1.ReportAck
+	(*ManifestContext)(nil),  // 0: podpulse.v1.ManifestContext
+	(*RecentDeploy)(nil),     // 1: podpulse.v1.RecentDeploy
+	(*DeployContext)(nil),    // 2: podpulse.v1.DeployContext
+	(*IncidentReport)(nil),   // 3: podpulse.v1.IncidentReport
+	(*ReportAck)(nil),        // 4: podpulse.v1.ReportAck
+	(*HeartbeatRequest)(nil), // 5: podpulse.v1.HeartbeatRequest
+	(*HeartbeatAck)(nil),     // 6: podpulse.v1.HeartbeatAck
 }
 var file_proto_podpulse_v1_incident_proto_depIdxs = []int32{
 	1, // 0: podpulse.v1.DeployContext.recent_deploys:type_name -> podpulse.v1.RecentDeploy
 	0, // 1: podpulse.v1.IncidentReport.manifest_context:type_name -> podpulse.v1.ManifestContext
 	2, // 2: podpulse.v1.IncidentReport.deploy_context:type_name -> podpulse.v1.DeployContext
 	3, // 3: podpulse.v1.IncidentService.ReportIncident:input_type -> podpulse.v1.IncidentReport
-	4, // 4: podpulse.v1.IncidentService.ReportIncident:output_type -> podpulse.v1.ReportAck
-	4, // [4:5] is the sub-list for method output_type
-	3, // [3:4] is the sub-list for method input_type
+	5, // 4: podpulse.v1.IncidentService.ReportHeartbeat:input_type -> podpulse.v1.HeartbeatRequest
+	4, // 5: podpulse.v1.IncidentService.ReportIncident:output_type -> podpulse.v1.ReportAck
+	6, // 6: podpulse.v1.IncidentService.ReportHeartbeat:output_type -> podpulse.v1.HeartbeatAck
+	5, // [5:7] is the sub-list for method output_type
+	3, // [3:5] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
 	3, // [3:3] is the sub-list for extension extendee
 	0, // [0:3] is the sub-list for field type_name
@@ -529,7 +636,7 @@ func file_proto_podpulse_v1_incident_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_podpulse_v1_incident_proto_rawDesc), len(file_proto_podpulse_v1_incident_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

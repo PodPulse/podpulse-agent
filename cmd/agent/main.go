@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/dynamic"
@@ -94,6 +95,22 @@ func main() {
 	cache.WaitForCacheSync(stopCh, podInformer.HasSynced, eventInformer.HasSynced, rsInformer.HasSynced)
 
 	fmt.Printf("[INFO] PodPulse agent started — backend: %s\n", appConfig.BackendAddr)
+
+	// Heartbeat goroutine — pings the backend every 30 s so the UI can show liveness.
+	go func() {
+		clusterName := appConfig.ClusterName
+		e.SendHeartbeat("1.0.0", clusterName)
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				e.SendHeartbeat("1.0.0", clusterName)
+			case <-stopCh:
+				return
+			}
+		}
+	}()
 
 	<-stopCh
 }
